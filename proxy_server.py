@@ -39,6 +39,7 @@ class ProxyServer:
             print("[INFO] 正向代理服务器已停止")
     
     def handle_client(self, client_socket, client_address):
+        server_socket = None
         try:
             # 接收客户端请求
             request_data = client_socket.recv(self.buffer_size)
@@ -49,8 +50,40 @@ class ProxyServer:
             # 解析请求
             request_str = request_data.decode('utf-8', errors='ignore')
             first_line = request_str.split('\n')[0]
-            method, url, version = first_line.split(' ')
             
+            # 处理可能的格式问题
+            line_parts = first_line.split(' ')
+            if len(line_parts) < 3:
+                client_socket.sendall(b'HTTP/1.1 400 Bad Request\r\n\r\n')
+                client_socket.close()
+                return
+            
+            method, url, version = line_parts
+            
+            # 处理CONNECT方法（HTTPS隧道）
+            if method == 'CONNECT':
+                print(f"[INFO] {client_address} 请求: CONNECT {url}")
+                
+                # 提取目标主机和端口
+                if ':' in url:
+                    target_hostname, target_port = url.split(':')
+                    target_port = int(target_port)
+                else:
+                    target_hostname = url
+                    target_port = 443
+                
+                # 连接目标服务器
+                server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                server_socket.connect((target_hostname, target_port))
+                
+                # 发送200 OK响应给客户端
+                client_socket.sendall(b'HTTP/1.1 200 Connection Established\r\n\r\n')
+                
+                # 开始双向数据转发
+                self.forward_data(client_socket, server_socket)
+                return
+            
+            # 处理HTTP请求
             # 处理完整URL和相对路径
             if url.startswith('http://'):
                 # 完整URL格式
@@ -111,8 +144,44 @@ class ProxyServer:
         finally:
             try:
                 client_socket.close()
-                if 'server_socket' in locals():
+                if server_socket:
                     server_socket.close()
+            except:
+                pass
+    
+    def forward_data(self, client_socket, server_socket):
+        """双向数据转发（用于HTTPS隧道）"""
+        try:
+            # 设置非阻塞模式
+            client_socket.setblocking(False)
+            server_socket.setblocking(False)
+            
+            while True:
+                try:
+                    # 从客户端读取数据并转发到服务器
+                    client_data = client_socket.recv(self.buffer_size)
+                    if client_data:
+                        server_socket.sendall(client_data)
+                    else:
+                        break
+                except socket.error:
+                    pass
+                
+                try:
+                    # 从服务器读取数据并转发到客户端
+                    server_data = server_socket.recv(self.buffer_size)
+                    if server_data:
+                        client_socket.sendall(server_data)
+                    else:
+                        break
+                except socket.error:
+                    pass
+        except Exception as e:
+            print(f"[ERROR] 数据转发时出错: {str(e)}")
+        finally:
+            try:
+                client_socket.close()
+                server_socket.close()
             except:
                 pass
 
