@@ -4,7 +4,7 @@ import sys
 import time
 
 class ProxyServer:
-    def __init__(self, host='0.0.0.0', port=8080, buffer_size=4096):
+    def __init__(self, host='0.0.0.0', port=15007, buffer_size=4096):
         self.host = host
         self.port = port
         self.buffer_size = buffer_size
@@ -119,14 +119,14 @@ class ProxyServer:
 def main():
     # 默认配置
     host = '0.0.0.0'
-    port = 8080
+    port = 15007
     
     # 命令行参数解析
     if len(sys.argv) > 1:
         if sys.argv[1] == '--help' or sys.argv[1] == '-h':
             print("使用方法:")
             print(f"  python {sys.argv[0]} [host] [port]")
-            print("  默认值: host=0.0.0.0, port=8080")
+            print("  默认值: host=0.0.0.0, port=15007")
             sys.exit(0)
         host = sys.argv[1]
         if len(sys.argv) > 2:
